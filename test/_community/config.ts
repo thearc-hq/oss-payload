@@ -1,29 +1,29 @@
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { azureStorage } from '@payloadcms/storage-azure'
+import dotenv from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import path from 'path'
 
 import { buildConfigWithDefaults } from '../buildConfigWithDefaults.js'
 import { devUser } from '../credentials.js'
-import { MediaCollection } from './collections/Media/index.js'
-import { PostsCollection, postsSlug } from './collections/Posts/index.js'
-import { MenuGlobal } from './globals/Menu/index.js'
+import { MediaCollection, mediaSlug } from './collections/Media/index.js'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+// Load config to work with emulated services
+dotenv.config({
+  path: path.resolve(dirname, '../plugin-cloud-storage/.env.emulated'),
+})
+
 export default buildConfigWithDefaults({
-  // ...extend config here
-  collections: [PostsCollection, MediaCollection],
+  collections: [MediaCollection],
   admin: {
     importMap: {
       baseDir: path.resolve(dirname),
     },
   },
   editor: lexicalEditor({}),
-  globals: [
-    // ...add more globals here
-    MenuGlobal,
-  ],
   onInit: async (payload) => {
     await payload.create({
       collection: 'users',
@@ -32,15 +32,23 @@ export default buildConfigWithDefaults({
         password: devUser.password,
       },
     })
-
-    await payload.create({
-      collection: postsSlug,
-      data: {
-        title: 'example post',
-      },
-    })
   },
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
+  upload: {
+    useTempFiles: true,
+    tempFileDir: '/tmp/uploads',
+  },
+  plugins: [
+    azureStorage({
+      collections: {
+        [mediaSlug]: true,
+      },
+      allowContainerCreate: process.env.AZURE_STORAGE_ALLOW_CONTAINER_CREATE === 'true',
+      baseURL: process.env.AZURE_STORAGE_ACCOUNT_BASEURL!,
+      connectionString: process.env.AZURE_STORAGE_CONNECTION_STRING!,
+      containerName: process.env.AZURE_STORAGE_CONTAINER_NAME!,
+    }),
+  ],
 })
